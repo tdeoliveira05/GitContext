@@ -1,5 +1,5 @@
 // test.js
-// FUNCTION: to test out analytics.js as a standalone function
+// PURPOSE: to test out analytics.js as a standalone function
 
 // Import the analytics function
 // var analytics = require('./analytics.js');
