@@ -4,8 +4,9 @@
 // INPUT: POI_Obj, an array containing information of the points of interest on the user's webpage
 // OUTPUT: infoPack, an object containing instructions to display the content on a user's webpage
 
-//TODO: Add speed units to dictionary
 //TODO: Add error handlers
+//TODO: Modularize all sections
+//TODO: Create a smart decimal place detector
 
 
 // Define userOptions
@@ -66,56 +67,29 @@ console.log(updatedObj)
 
 //-------------------------------- FUNCTIONS ---------------------------------//
 
-function convertMeasurementText(unitObj, userOptions, dictionary) {
+function convertMeasurementText(measurementText, userOptions, dictionary) {
 
-  // VALIDATION of measurementText____________________________________________________________________________________________________________________
-  // declare a speed variable in case the conversion is for a speed value
-  var speedBoolean;
+  // ERROR HANDLER: Run a text validator on the input and exit the function if it returns FALSE
+  if (!validateText(measurementText)) return
 
-  // Split the measurementText into an array [value, unit]
-  var textArray = measurementText.split(' ')
-
-  if (textArray.length > 2) {
-    console.log('(analytics.js) error 0: too many spaces in measurementText')
-  } else if (textArray.length == 1) {
-    console.log('(analytics.js) error 1: no space in measurementText')
-  }
-
-  // handle example where units are in plural with a letter 's' in the end
-  var temp = textArray[1].split('')
-
-  // If the last array value is an 's' OR the array DOES NOT contain a speed unit that includes an '/'
+  // Prepare the measurementText and mass-declare the variables inside the returned object
+  var {value, unit, conversionType, decimalPlaces} = prepareText(measurementText, userOptions)
 
 
-  // _______________________________________________________________________________________________________________________________________________
-  if (temp.includes('/')) {
-    // this is a speed measurement which means time + distance conversions with additional calculations needed
-    var conversionType = 'speed';
 
-  } else {
-    var conversionType = 'notSpeed';
-  }
-  var value = textArray[0];
-  var unit = temp.join('');
+  /*
+  var value = preparedObject.value
+  var unit = preparedObject.unit
+  var conversionType = preparedObject.conversionType
+  var decimalPlaces = preparedObject.decimalPlaces
+  */
 
-  //+ Decide on what decimal places to return to the user
-  //+ This splits the value based on whether there is a decimal point, creating an array with two values - ['pre-decimal', 'post-decimal']
-  var decimalArray = value.toString().split('.')
-  if (decimalArray[1]) {
-    var decimalPlaces = decimalArray[1].length;
-    //+ cap the maximum decimal points at a value that the user specifies in userOptions.decimalPlaces
-    if (decimalPlaces > userOptions.decimalPlaces.max) {
-      decimalPlaces = userOptions.decimalPlaces.max;
-    }
-
-  } else {
-    var decimalPlaces = userOptions.decimalPlaces.default
-  }
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////-----------------  DISTANCE and WEIGHT conversions -----------------//////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  if (conversionType === 'notSpeed') {
+  if (conversionType === 'singleUnit') {
+
 
     //+ Define the $originSys and $measurementType of $measurementText by using a recursive for-loop on the dictionary to search for a match
     for (var measurementTypeInd in dictionary) {
@@ -164,6 +138,7 @@ function convertMeasurementText(unitObj, userOptions, dictionary) {
 
     //+ VALIDATION of unit properties and conversion parameters ________________________________________________________________________________________
 
+
     if (!measurementType) {
       console.log('(analytics.js) error 2: the input unit of {' + unit + '} was not found in the dictionary')
     }
@@ -179,7 +154,6 @@ function convertMeasurementText(unitObj, userOptions, dictionary) {
     if (!endIndex) {
       console.log('(analytics.js) error 4: recursive for-loop error, Desired unit type was not found in the dictionary')
     }
-
     //+ _______________________________________________________________________________________________________________________________________________
     //+----- Create factor multiplicator -----//
 
@@ -237,16 +211,17 @@ function convertMeasurementText(unitObj, userOptions, dictionary) {
       'measurementType': measurementType,
       'completed': true
     }
+
   }
 
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////------------------------  SPEED conversions ------------------------//////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  if (conversionType === 'speed') {
+  if (conversionType === 'multiUnit') {
     // Deifne multi parameter conversion
-    var distanceUnit = unit.split('/')[0];
-    var timeUnit = unit.split('/')[1];
+    var distanceUnit = unit.distance;
+    var timeUnit = unit.time;
 
     // Define targets
     var targetDistanceUnit = userOptions.units['speed'].split('/')[0];
@@ -397,6 +372,8 @@ function convertMeasurementText(unitObj, userOptions, dictionary) {
       'completed': true
     }
 
+    console.log('reached the end')
+
 
   }
 
@@ -405,4 +382,84 @@ function convertMeasurementText(unitObj, userOptions, dictionary) {
   // return updated and converted object
 
   return updatedUnitObj
+}
+
+
+function validateText(measurementText) {
+  // VALIDATION of measurementText____________________________________________________________________________________________________________________
+  console.log('Validating: ' + ' \"' + measurementText + '\"  ')
+
+  //Boolean declaration
+  var errorBoolean = false;
+
+  // Split the measurementText into an array [value, unit]
+  var textArray = measurementText.split(' ');
+
+  if (textArray.length > 2) {
+    console.log('(analytics.js) error 0: too many spaces in measurementText');
+    errorBoolean = true
+  }
+
+  if (textArray.length == 1) {
+    console.log('(analytics.js) error 1: no space in measurementText');
+    errorBoolean = true
+  }
+
+  if (!errorBoolean) console.log('Finished Validating...')
+
+  // Return on the inverse of the error boolean
+  return !errorBoolean
+
+  // _______________________________________________________________________________________________________________________________________________
+}
+
+function prepareText(measurementText, userOptions) {
+  // Declare an object that will be returned
+  var preparedObject = new Object()
+
+  // Use a $temp for evaluation by splitting measurementText into two pieces divided by a space
+  var temp = measurementText.split(' ')
+
+  // Check if $measurementText is a speed measurement by evaluating if a slash is present on i = 1 of $temp
+  if (temp[1].split('').includes('/')) {
+    // Declare a multi-unit conversion
+    preparedObject.conversionType = 'multiUnit';
+
+    // Insert unit types into $preparedObject
+    preparedObject.unit = {
+      'distance': temp[1].split('/')[0],
+      'time': temp[1].split('/')[1]
+    }
+  } else {
+    // Declare a single unit conversion
+    preparedObject.conversionType = 'singleUnit';
+
+    // Insert the single unit type into $preparedObject
+    preparedObject.unit = temp[1]
+  }
+
+  // Universal declaration of the measurement's value that will be submitted to conversion
+  preparedObject.value = temp[0];
+
+
+  // Check how many decimal places are present in the value
+  var decimalArray = temp[0].toString().split('.')
+
+  // Evaluate how many decimal places should be in the final converted value
+  if (decimalArray[1]) {
+    // Find how many decimal places are present
+    preparedObject.decimalPlaces = decimalArray[1].length;
+
+    // Cap the maximum decimal points at a value that the user specifies in userOptions.decimalPlaces
+    if (preparedObject.decimalPlaces > userOptions.decimalPlaces.max) {
+      preparedObject.decimalPlaces = userOptions.decimalPlaces.max;
+    }
+
+  } else {
+    // If no decimal places are present, insert the default number
+    preparedObject.decimalPlaces = userOptions.decimalPlaces.default
+  }
+
+  return preparedObject
+
 }
